@@ -61,7 +61,7 @@
 #define CONFIG_TCP_KEEPALIVE_CNT 2
 
 /* maximum COTP (ISO 8073) TPDU size - valid range is 1024 - 8192 */
-#define CONFIG_COTP_MAX_TPDU_SIZE 8192
+#cmakedefine CONFIG_COTP_MAX_TPDU_SIZE @CONFIG_COTP_MAX_TPDU_SIZE@
 
 /* Ethernet interface ID for GOOSE and SV */
 #define CONFIG_ETHERNET_INTERFACE_ID "eth0"
@@ -72,7 +72,7 @@
 #cmakedefine01 CONFIG_INCLUDE_GOOSE_SUPPORT
 
 /* Set to 1 to include generic Sampled Values support in the build. Otherwise set to 0 */
-#define CONFIG_IEC61850_SAMPLED_VALUES_SUPPORT 1
+#cmakedefine01 CONFIG_IEC61850_SAMPLED_VALUES_SUPPORT
 
 /* compile with support for R-GOOSE (mbedtls requried) */
 #cmakedefine01 CONFIG_IEC61850_R_GOOSE
@@ -180,7 +180,7 @@
 #define CONFIG_IEC61850_SUPPORT_SERVER_IDENTITY 1
 
 /* Force memory alignment - required for some platforms (requires more memory for buffered reporting) */
-#define CONFIG_IEC61850_FORCE_MEMORY_ALIGNMENT 1
+#cmakedefine01 CONFIG_IEC61850_FORCE_MEMORY_ALIGNMENT
 
 /* default results for MMS identify service */
 #define CONFIG_DEFAULT_MMS_VENDOR_NAME "libiec61850.com"
@@ -212,24 +212,20 @@
 #cmakedefine CONFIG_MMS_SERVER_MAX_GET_FILE_TASKS @CONFIG_MMS_SERVER_MAX_GET_FILE_TASKS@
 
 /* Definition of supported services */
-#define MMS_DEFAULT_PROFILE 1
-
-#if MMS_DEFAULT_PROFILE
-#define MMS_READ_SERVICE 1
-#define MMS_WRITE_SERVICE 1
-#define MMS_GET_NAME_LIST 1
-#define MMS_JOURNAL_SERVICE 1
-#define MMS_GET_VARIABLE_ACCESS_ATTRIBUTES 1
-#define MMS_DATA_SET_SERVICE 1
-#define MMS_DYNAMIC_DATA_SETS 1
-#define MMS_GET_DATA_SET_ATTRIBUTES 1
-#define MMS_STATUS_SERVICE 1
-#define MMS_IDENTIFY_SERVICE 1
-#define MMS_FILE_SERVICE 1
-#define MMS_OBTAIN_FILE_SERVICE 1
-#define MMS_DELETE_FILE_SERVICE 1
-#define MMS_RENAME_FILE_SERVICE 0
-#endif /* MMS_DEFAULT_PROFILE */
+#cmakedefine01 MMS_READ_SERVICE
+#cmakedefine01 MMS_WRITE_SERVICE
+#cmakedefine01 MMS_GET_NAME_LIST
+#cmakedefine01 MMS_JOURNAL_SERVICE
+#cmakedefine01 MMS_GET_VARIABLE_ACCESS_ATTRIBUTES
+#cmakedefine01 MMS_DATA_SET_SERVICE
+#cmakedefine01 MMS_DYNAMIC_DATA_SETS
+#cmakedefine01 MMS_GET_DATA_SET_ATTRIBUTES
+#cmakedefine01 MMS_STATUS_SERVICE
+#cmakedefine01 MMS_IDENTIFY_SERVICE
+#cmakedefine01 MMS_FILE_SERVICE
+#cmakedefine01 MMS_OBTAIN_FILE_SERVICE
+#cmakedefine01 MMS_DELETE_FILE_SERVICE
+#cmakedefine01 MMS_RENAME_FILE_SERVICE
 
 /* Sort getNameList response according to the MMS specified collation order - this is required by the standard
  * Set to 0 only for performance reasons and when no certification is required! */
