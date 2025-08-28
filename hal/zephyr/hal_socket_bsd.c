@@ -13,6 +13,13 @@
 #include <string.h>
 #include <zephyr/net/net_ip.h>
 
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+#include <zephyr/kernel.h>
+#define LZDBG(fmt, ...) printk("[libiec][sock] " fmt "\n", ##__VA_ARGS__)
+#else
+#define LZDBG(...) do { } while (0)
+#endif
+
 struct sSocket {
     int fd;
     uint32_t connectTimeout;
@@ -42,6 +49,7 @@ Handleset_new(void)
         hs->pfds = (struct pollfd*)GLOBAL_CALLOC(hs->cap, sizeof(struct pollfd));
         if (!hs->pfds) { GLOBAL_FREEMEM(hs); return NULL; }
     }
+    LZDBG("handleset:new cap=%d ptr=%p", hs ? hs->cap : -1, hs);
     return hs;
 }
 
@@ -50,6 +58,7 @@ Handleset_reset(HandleSet self)
 {
     if (!self) return;
     self->count = 0;
+    LZDBG("handleset:reset");
 }
 
 PAL_API void
@@ -62,11 +71,13 @@ Handleset_addSocket(HandleSet self, const Socket sock)
         if (!np) return;
         self->pfds = np;
         self->cap = ncap;
+        LZDBG("handleset:grow -> cap=%d", self->cap);
     }
     self->pfds[self->count].fd = sock->fd;
     self->pfds[self->count].events = POLLIN;
     self->pfds[self->count].revents = 0;
     self->count++;
+    LZDBG("handleset:add fd=%d count=%d", sock->fd, self->count);
 }
 
 void
@@ -87,7 +98,16 @@ PAL_API int
 Handleset_waitReady(HandleSet self, unsigned int timeoutMs)
 {
     if (!self) return -1;
-    return poll(self->pfds, (unsigned int)self->count, (int)timeoutMs);
+    int r = poll(self->pfds, (unsigned int)self->count, (int)timeoutMs);
+    if (r <= 0) {
+        static unsigned int idle_cnt;
+        if ((++idle_cnt % 500) == 0) {
+            LZDBG("handleset:waitReady idle count=%d timeout=%u", self->count, timeoutMs);
+        }
+    } else {
+        LZDBG("handleset:waitReady count=%d timeout=%u -> %d", self->count, timeoutMs, r);
+    }
+    return r;
 }
 
 PAL_API void
@@ -106,6 +126,7 @@ TcpServerSocket_create(const char* address, int port)
     int one = 1;
     (void)setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one));
     (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    LZDBG("tcp:server:create fd=%d addr=%s port=%d", fd, address ? address : "(null)", port);
 
     struct addrinfo hints = {0}, *res = NULL;
     hints.ai_family = AF_INET6;
@@ -116,9 +137,9 @@ TcpServerSocket_create(const char* address, int port)
     if (rc != 0 || !res) {
         struct sockaddr_in6 a6 = {0};
         a6.sin6_family = AF_INET6; a6.sin6_port = htons((uint16_t)port); a6.sin6_addr = in6addr_any;
-        if (bind(fd, (struct sockaddr*)&a6, sizeof(a6)) < 0) { close(fd); return NULL; }
+        if (bind(fd, (struct sockaddr*)&a6, sizeof(a6)) < 0) { LZDBG("tcp:server:bind any6 errno=%d", errno); close(fd); return NULL; }
     } else {
-        if (bind(fd, res->ai_addr, res->ai_addrlen) < 0) { freeaddrinfo(res); close(fd); return NULL; }
+        if (bind(fd, res->ai_addr, res->ai_addrlen) < 0) { LZDBG("tcp:server:bind gai errno=%d", errno); freeaddrinfo(res); close(fd); return NULL; }
         freeaddrinfo(res);
     }
     int fl = fcntl(fd, F_GETFL, 0);
@@ -187,6 +208,8 @@ TcpSocket_create(void)
 {
     int fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0) return NULL;
+    int one = 1;
+    (void)setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one));
     int fl = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, fl | O_NONBLOCK);
     struct sSocket* s = (struct sSocket*)GLOBAL_CALLOC(1, sizeof(struct sSocket));
@@ -222,18 +245,20 @@ Socket_connect(Socket self, const char* address, int port)
     hints.ai_family = AF_INET6; hints.ai_socktype = SOCK_STREAM;
     snprintf(portstr, sizeof(portstr), "%d", port);
     int rc = getaddrinfo(address, portstr, &hints, &res);
-    if (rc != 0 || !res) return false;
+    if (rc != 0 || !res) { LZDBG("tcp:connect gai fail rc=%d", rc); return false; }
     int c = connect(self->fd, res->ai_addr, res->ai_addrlen);
     if (c < 0 && errno == EINPROGRESS) {
         struct pollfd p = { .fd = self->fd, .events = POLLOUT };
         int pr = poll(&p, 1, (int)self->connectTimeout);
-        if (pr <= 0) { freeaddrinfo(res); return false; }
+        if (pr <= 0) { LZDBG("tcp:connect wait timeout fd=%d", self->fd); freeaddrinfo(res); return false; }
         int err = 0; socklen_t elen = sizeof(err);
         getsockopt(self->fd, SOL_SOCKET, SO_ERROR, &err, &elen);
         freeaddrinfo(res);
+        LZDBG("tcp:connect async fd=%d err=%d", self->fd, err);
         return (err == 0);
     }
     freeaddrinfo(res);
+    LZDBG("tcp:connect sync fd=%d rc=%d errno=%d", self->fd, c, errno);
     return (c == 0);
 }
 
@@ -258,6 +283,7 @@ Socket_checkAsyncConnectState(Socket self)
     if (!self) return SOCKET_STATE_FAILED;
     int err = 0; socklen_t elen = sizeof(err);
     if (getsockopt(self->fd, SOL_SOCKET, SO_ERROR, &err, &elen) < 0) return SOCKET_STATE_FAILED;
+    LZDBG("tcp:connect state fd=%d err=%d", self->fd, err);
     return (err == 0) ? SOCKET_STATE_CONNECTED : SOCKET_STATE_FAILED;
 }
 
@@ -269,8 +295,10 @@ Socket_read(Socket self, uint8_t* buf, int size)
     if (r == 0) return -1;
     if (r < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+        LZDBG("tcp:read fd=%d err=%d", self->fd, errno);
         return -1;
     }
+    LZDBG("tcp:read fd=%d r=%d", self->fd, r);
     return r;
 }
 
@@ -279,7 +307,9 @@ Socket_write(Socket self, uint8_t* buf, int size)
 {
     if (!self) return -1;
     int r = send(self->fd, buf, (size_t)size, 0);
-    return (r < 0) ? -1 : r;
+    if (r < 0) { LZDBG("tcp:write fd=%d err=%d", self->fd, errno); return -1; }
+    LZDBG("tcp:write fd=%d r=%d", self->fd, r);
+    return r;
 }
 
 PAL_API char*
@@ -361,6 +391,7 @@ Socket_getPeerAddressStatic(Socket self, char* peerAddressString)
         net_addr_ntop(AF_INET, &a4->sin_addr, ip, sizeof(ip));
         snprintf(peerAddressString, 60, "%s:%u", ip, ntohs(a4->sin_port));
     }
+    LZDBG("tcp:getPeer fd=%d %s", self->fd, peerAddressString);
     return peerAddressString;
 }
 
@@ -369,13 +400,14 @@ Socket_destroy(Socket self)
 {
     if (!self) return;
     if (self->fd >= 0) close(self->fd);
+    LZDBG("tcp:socket:destroy fd=%d", self->fd);
     GLOBAL_FREEMEM(self);
 }
 
 PAL_API UdpSocket
 UdpSocket_create(void)
 {
-    int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (fd < 0) return NULL;
     struct sUdpSocket* us = (struct sUdpSocket*)GLOBAL_CALLOC(1, sizeof(struct sUdpSocket));
     if (!us) { close(fd); return NULL; }
@@ -387,6 +419,8 @@ UdpSocket_createIpV6(void)
 {
     int fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (fd < 0) return NULL;
+    int one = 1;
+    (void)setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one));
     struct sUdpSocket* us = (struct sUdpSocket*)GLOBAL_CALLOC(1, sizeof(struct sUdpSocket));
     if (!us) { close(fd); return NULL; }
     us->fd = fd; return us;
@@ -418,10 +452,11 @@ UdpSocket_sendTo(UdpSocket self, const char* address, int port, uint8_t* msg, in
 {
     if (!self || !address) return false;
     struct addrinfo hints = {0}, *res = NULL; char portstr[16];
-    hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_family = AF_INET6; hints.ai_socktype = SOCK_DGRAM;
     snprintf(portstr, sizeof(portstr), "%d", port);
     if (getaddrinfo(address, portstr, &hints, &res) != 0 || !res) return false;
     int rc = sendto(self->fd, msg, (size_t)msgSize, 0, res->ai_addr, res->ai_addrlen);
+    LZDBG("udp:send fd=%d bytes=%d rc=%d errno=%d", self->fd, msgSize, rc, errno);
     freeaddrinfo(res);
     return (rc == msgSize);
 }
@@ -434,6 +469,7 @@ UdpSocket_receiveFrom(UdpSocket self, char* address, int maxAddrSize, uint8_t* m
     int r = recvfrom(self->fd, msg, (size_t)msgSize, MSG_DONTWAIT, (struct sockaddr*)&ss, &sl);
     if (r < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+        LZDBG("udp:recv fd=%d err=%d", self->fd, errno);
         return -1;
     }
     if (address && maxAddrSize > 0) {
@@ -447,5 +483,6 @@ UdpSocket_receiveFrom(UdpSocket self, char* address, int maxAddrSize, uint8_t* m
             snprintf(address, (size_t)maxAddrSize, "%s:%u", ip, ntohs(a4->sin_port));
         }
     }
+    LZDBG("udp:recv fd=%d r=%d", self->fd, r);
     return r;
 }

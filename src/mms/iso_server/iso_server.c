@@ -458,6 +458,9 @@ setupIsoServer(IsoServer self)
 {
     bool success = true;
 
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+    printf("ISO_SERVER: setup begin local=%s port=%d\n", self->localIpAddress ? self->localIpAddress : "(null)", self->tcpPort);
+#endif
     self->serverSocket = (Socket) TcpServerSocket_create(self->localIpAddress, self->tcpPort);
 
     if (self->serverSocket == NULL) {
@@ -490,6 +493,9 @@ setupIsoServer(IsoServer self)
 
     setState(self, ISO_SVR_STATE_RUNNING);
 
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+    printf("ISO_SERVER: setup done, state=RUNNING\n");
+#endif
 exit_function:
     return success;
 }
@@ -501,6 +507,10 @@ exit_function:
 static void
 handleIsoConnections(IsoServer self, bool isSingleThread)
 {
+    #if defined(LIBIEC_ZEPHYR_DEBUG)
+    printf("ISO_SERVER: enter handleIsoConnections(single=%d, open=%d)\n",
+           isSingleThread ? 1 : 0, private_IsoServer_getConnectionCounter(self));
+    #endif
     if (isSingleThread) {
         /*
          * NOTE: when running in multi thread mode the tick handler is called
@@ -511,10 +521,18 @@ handleIsoConnections(IsoServer self, bool isSingleThread)
 
     int wr = Handleset_waitReady(self->handleset, CONFIG_SERVER_POLLING_TIMEOUT_MS);
     if (wr < 1) return;
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+    if (wr >= 1) {
+        printf("ISO_SERVER: handleset ready=%d (single=%d)\n", wr, isSingleThread ? 1 : 0);
+    }
+#endif
 
     Socket connectionSocket;
 
     if ((connectionSocket = ServerSocket_accept((ServerSocket) self->serverSocket)) != NULL) {
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_SERVER: accept() -> new socket\n");
+#endif
 
 #if (CONFIG_MMS_SERVER_CONFIG_SERVICES_AT_RUNTIME == 1)
         if (self->maxConnections > -1) {
@@ -546,6 +564,9 @@ handleIsoConnections(IsoServer self, bool isSingleThread)
         IsoConnection isoConnection = IsoConnection_create(connectionSocket, self, isSingleThread);
 
         if (isoConnection) {
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+            printf("ISO_SERVER: connection object=%p created\n", isoConnection);
+#endif
             addClientConnection(self, isoConnection);
 
             if (isSingleThread)
@@ -933,4 +954,3 @@ private_IsoServer_getConnectionCounter(IsoServer self)
 
     return connectionCounter;
 }
-

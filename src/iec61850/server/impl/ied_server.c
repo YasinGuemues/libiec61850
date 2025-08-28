@@ -40,6 +40,23 @@
 #define DEBUG_IED_SERVER 0
 #endif
 
+#include "lib_memory.h"
+
+/* Simple OOM hook for Zephyr bring-up */
+#ifdef LIBIEC_ZEPHYR_DEBUG
+static void libiec_oom_handler(void* p)
+{
+    ARG_UNUSED(p);
+    printk("[libiec][mem] OOM detected by Memory_* API\n");
+}
+#endif
+#ifdef LIBIEC_ZEPHYR_DEBUG
+#include <zephyr/sys/printk.h>
+#define IEC_DBG(fmt, ...) printk("[libiec][IedServer] " fmt "\n", ##__VA_ARGS__)
+#else
+#define IEC_DBG(...) do {} while (0)
+#endif
+
 #if (CONFIG_IEC61850_CONTROL_SERVICE == 1)
 static bool
 createControlObjects(IedServer self, MmsDomain* domain, char* lnName, MmsVariableSpecification* typeSpec, char* namePrefix)
@@ -615,6 +632,10 @@ updateDataSetsWithCachedValues(IedServer self)
 IedServer
 IedServer_createWithConfig(IedModel* dataModel, TLSConfiguration tlsConfiguration, IedServerConfig serverConfiguration)
 {
+    IEC_DBG("createWithConfig: enter (dataModel=%p)", dataModel);
+#ifdef LIBIEC_ZEPHYR_DEBUG
+    Memory_installExceptionHandler(libiec_oom_handler, NULL);
+#endif
     IedServer self = (IedServer) GLOBAL_CALLOC(1, sizeof(struct sIedServer));
 
     if (self)
@@ -645,6 +666,7 @@ IedServer_createWithConfig(IedModel* dataModel, TLSConfiguration tlsConfiguratio
 #if (CONFIG_MMS_THREADLESS_STACK != 1)
         self->dataModelLock = Semaphore_create(1);
         self->clientConnectionsLock = Semaphore_create(1);
+        IEC_DBG("semaphores created: %p %p", self->dataModelLock, self->clientConnectionsLock);
 #endif /* (CONFIG_MMS_SERVER_CONFIG_SERVICES_AT_RUNTIME == 1) */
 
 #if (CONFIG_IEC61850_REPORT_SERVICE == 1)
@@ -690,13 +712,22 @@ IedServer_createWithConfig(IedModel* dataModel, TLSConfiguration tlsConfiguratio
         }
 #endif
 
+        IEC_DBG("about to create MMS mapping");
+        if (dataModel) {
+            IEC_DBG("dataModel sanity: name=%p firstChild=%p dataSets=%p rcbs=%p",
+                    (void*)dataModel->name, (void*)dataModel->firstChild,
+                    (void*)dataModel->dataSets, (void*)dataModel->rcbs);
+        }
         self->mmsMapping = MmsMapping_create(dataModel, self);
 
         if (self->mmsMapping)
         {
+            IEC_DBG("mmsMapping created: %p", self->mmsMapping);
             self->mmsDevice = MmsMapping_getMmsDeviceModel(self->mmsMapping);
 
+            IEC_DBG("about to create MmsServer (device=%p)", self->mmsDevice);
             self->mmsServer = MmsServer_create(self->mmsDevice, tlsConfiguration);
+            IEC_DBG("MmsServer_create returned: %p", self->mmsServer);
 
 #if (CONFIG_MMS_SERVER_CONFIG_SERVICES_AT_RUNTIME == 1)
             if (serverConfiguration)
@@ -716,13 +747,21 @@ IedServer_createWithConfig(IedModel* dataModel, TLSConfiguration tlsConfiguratio
 
             MmsMapping_installHandlers(self->mmsMapping);
 
+            IEC_DBG("about to create MmsServer cache");
             createMmsServerCache(self);
+            IEC_DBG("cache created");
 
+            IEC_DBG("about to call dataModel->initializer()");
             dataModel->initializer();
+            IEC_DBG("initializer returned");
 
+            IEC_DBG("about to install default values in cache");
             installDefaultValuesInCache(self); /* This will also connect cached MmsValues to DataAttributes */
+            IEC_DBG("default values installed");
 
+            IEC_DBG("about to update data sets with cached values");
             updateDataSetsWithCachedValues(self);
+            IEC_DBG("updated data sets with cached values");
 
             self->clientConnections = LinkedList_create();
 
@@ -747,15 +786,19 @@ IedServer_createWithConfig(IedModel* dataModel, TLSConfiguration tlsConfiguratio
 		    }
 #endif
 
+            IEC_DBG("about to set time quality");
             IedServer_setTimeQuality(self, true, false, false, 10);
+            IEC_DBG("createWithConfig: success");
         }
         else
         {
+            IEC_DBG("mmsMapping creation failed");
             IedServer_destroy(self);
             self = NULL;
         }
     }
 
+    IEC_DBG("createWithConfig: exit self=%p", self);
     return self;
 }
 
@@ -857,6 +900,9 @@ singleThreadedServerThread(void* parameter)
     if (DEBUG_IED_SERVER)
         printf("IED_SERVER: server thread started!\n");
 
+    #if (DEBUG_IED_SERVER)
+    unsigned int loop_counter = 0;
+    #endif
     while (running)
     {
         MmsServer_handleIncomingMessages(self->mmsServer);
@@ -864,6 +910,13 @@ singleThreadedServerThread(void* parameter)
         IedServer_performPeriodicTasks(self);
 
         running = mmsMapping->reportThreadRunning;
+
+#if (DEBUG_IED_SERVER)
+        if ((++loop_counter % 1000) == 0) {
+            printf("IED_SERVER: single thread tick, open=%d running=%d\n",
+                   MmsServer_getConnectionCounter(self->mmsServer), (int)running);
+        }
+#endif
     }
 
     if (DEBUG_IED_SERVER)

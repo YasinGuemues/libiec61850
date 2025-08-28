@@ -170,6 +170,9 @@ IsoConnection_callTickHandler(IsoConnection self)
 void
 IsoConnection_handleTcpConnection(IsoConnection self, bool isSingleThread)
 {
+    #if defined(LIBIEC_ZEPHYR_DEBUG)
+    printf("ISO_CONN(%p): handleTcpConnection single=%d state=%d\n", self, isSingleThread ? 1 : 0, self->state);
+    #endif
 #if (CONFIG_MMS_SINGLE_THREADED != 1)
     if (isSingleThread == false) {
 
@@ -181,6 +184,9 @@ IsoConnection_handleTcpConnection(IsoConnection self, bool isSingleThread)
 #endif
 
     TpktState tpktState = CotpConnection_readToTpktBuffer(self->cotpConnection);
+    #if defined(LIBIEC_ZEPHYR_DEBUG)
+    printf("ISO_CONN(%p): TPKT state=%d\n", self, (int)tpktState);
+    #endif
 
     if (tpktState == TPKT_ERROR)
         self->state = ISO_CON_STATE_STOPPED;
@@ -189,6 +195,9 @@ IsoConnection_handleTcpConnection(IsoConnection self, bool isSingleThread)
         goto exit_function;
 
     CotpIndication cotpIndication = CotpConnection_parseIncomingMessage(self->cotpConnection);
+    #if defined(LIBIEC_ZEPHYR_DEBUG)
+    printf("ISO_CONN(%p): COTP indication=%d\n", self, (int)cotpIndication);
+    #endif
 
     switch (cotpIndication) {
     case COTP_MORE_FRAGMENTS_FOLLOW:
@@ -496,6 +505,9 @@ IsoConnection_create(Socket socket, IsoServer isoServer, bool isSingleThread)
 
     if (self) {
         self->socket = socket;
+        #if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_CONN(%p): create enter socket=%p single=%d\n", self, socket, isSingleThread ? 1 : 0);
+        #endif
 
 #if (CONFIG_MMS_SUPPORT_TLS == 1)
         if (IsoServer_getTLSConfiguration(isoServer) != NULL) {
@@ -514,6 +526,9 @@ IsoConnection_create(Socket socket, IsoServer isoServer, bool isSingleThread)
 
         self->receiveBuffer = (uint8_t*) GLOBAL_MALLOC(RECEIVE_BUF_SIZE);
         self->sendBuffer = (uint8_t*) GLOBAL_MALLOC(SEND_BUF_SIZE);
+        #if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_CONN(%p): bufs recv=%p send=%p\n", self, self->receiveBuffer, self->sendBuffer);
+        #endif
         self->msgRcvdHandler = NULL;
         self->tickHandler = NULL;
         self->handlerParameter = NULL;
@@ -521,6 +536,12 @@ IsoConnection_create(Socket socket, IsoServer isoServer, bool isSingleThread)
         self->state = ISO_CON_STATE_RUNNING;
         self->clientAddress = Socket_getPeerAddress(self->socket);
         self->localAddress = Socket_getLocalAddress(self->socket);
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_CONN(%p): peer=%s local=%s\n", self, self->clientAddress ? self->clientAddress : "(null)", self->localAddress ? self->localAddress : "(null)");
+        if (!self->clientAddress || !self->localAddress) {
+            printf("ISO_CONN(%p): WARNING missing socket addresses (peer/local)\n", self);
+        }
+#endif
 
 #if (CONFIG_MMS_THREADLESS_STACK != 1)
         self->conMutex = Semaphore_create(1);
@@ -530,6 +551,12 @@ IsoConnection_create(Socket socket, IsoServer isoServer, bool isSingleThread)
 
         self->cotpReadBuf = (uint8_t*) GLOBAL_MALLOC(CONFIG_COTP_MAX_TPDU_SIZE + TPKT_RFC1006_HEADER_SIZE);
         self->cotpWriteBuf = (uint8_t*) GLOBAL_MALLOC(CONFIG_COTP_MAX_TPDU_SIZE + TPKT_RFC1006_HEADER_SIZE);
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_CONN(%p): cotp bufs r=%p w=%p\n", self, self->cotpReadBuf, self->cotpWriteBuf);
+        if (!self->cotpReadBuf || !self->cotpWriteBuf) {
+            printf("ISO_CONN(%p): ERROR COTP buffer allocation failed (r=%p w=%p)\n", self, self->cotpReadBuf, self->cotpWriteBuf);
+        }
+#endif
 
         ByteBuffer_wrap(&(self->cotpReadBuffer), self->cotpReadBuf, 0, CONFIG_COTP_MAX_TPDU_SIZE + TPKT_RFC1006_HEADER_SIZE);
         ByteBuffer_wrap(&(self->cotpWriteBuffer), self->cotpWriteBuf, 0, CONFIG_COTP_MAX_TPDU_SIZE + TPKT_RFC1006_HEADER_SIZE);
@@ -539,6 +566,12 @@ IsoConnection_create(Socket socket, IsoServer isoServer, bool isSingleThread)
         uint8_t* socketExtensionBuffer = (uint8_t*)GLOBAL_MALLOC(socketExtensionBufferSize);
         CotpConnection_init(self->cotpConnection, self->socket, &(self->rcvBuffer), &(self->cotpReadBuffer), &(self->cotpWriteBuffer),
                 socketExtensionBuffer, socketExtensionBufferSize);
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_CONN(%p): cotp init conn=%p extbuf=%p size=%d\n", self, self->cotpConnection, socketExtensionBuffer, socketExtensionBufferSize);
+        if (!socketExtensionBuffer) {
+            printf("ISO_CONN(%p): WARNING socketExtensionBuffer alloc failed (size=%d)\n", self, socketExtensionBufferSize);
+        }
+#endif
 
 #if (CONFIG_MMS_SUPPORT_TLS == 1)
         if (self->tlsSocket)
@@ -552,6 +585,9 @@ IsoConnection_create(Socket socket, IsoServer isoServer, bool isSingleThread)
         IsoPresentation_init(self->presentation);
 
         self->acseConnection = (AcseConnection*) GLOBAL_CALLOC(1, sizeof(AcseConnection));
+        #if defined(LIBIEC_ZEPHYR_DEBUG)
+        printf("ISO_CONN(%p): layer alloc session=%p pres=%p acse=%p\n", self, self->session, self->presentation, self->acseConnection);
+        #endif
 
 #if (CONFIG_MMS_SUPPORT_TLS == 1)
         AcseConnection_init(self->acseConnection, IsoServer_getAuthenticator(self->isoServer),

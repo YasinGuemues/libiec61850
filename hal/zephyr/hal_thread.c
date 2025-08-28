@@ -51,6 +51,9 @@ static int hal_alloc_slot(void)
             return i;
         }
     }
+#if defined(CONFIG_LOG) || defined(LIBIEC_ZEPHYR_DEBUG)
+    printk("[libiec][thr] no free thread slot (max=%d)\n", HAL_THREAD_MAX_SLOTS);
+#endif
     return -1;
 }
 
@@ -75,8 +78,12 @@ Thread_start(Thread thread)
 
     if (thread->slot < 0) {
         int s = hal_alloc_slot();
-        if (s < 0)
+        if (s < 0) {
+#if defined(CONFIG_LOG) || defined(LIBIEC_ZEPHYR_DEBUG)
+            printk("[libiec][thr] Thread_start: allocation failed\n");
+#endif
             return; /* no slot available */
+        }
         thread->slot = s;
     }
 
@@ -84,6 +91,9 @@ Thread_start(Thread thread)
     k_thread_create(&hal_threads[s], hal_stacks[s], HAL_THREAD_STACK_SIZE,
                     hal_thread_entry, thread, NULL, NULL,
                     K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
+#if defined(CONFIG_LOG) || defined(LIBIEC_ZEPHYR_DEBUG)
+    printk("[libiec][thr] thread started slot=%d func=%p param=%p\n", s, thread->function, thread->parameter);
+#endif
 }
 
 PAL_API void

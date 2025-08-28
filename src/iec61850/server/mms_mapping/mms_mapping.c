@@ -22,6 +22,12 @@
  */
 
 #include "libiec61850_platform_includes.h"
+#if defined(LIBIEC_ZEPHYR_DEBUG)
+#include <zephyr/kernel.h>
+#define MMAP_DBG(fmt, ...) printk("[libiec][MmsMapping] " fmt "\n", ##__VA_ARGS__)
+#else
+#define MMAP_DBG(...) do {} while (0)
+#endif
 #include "mms_mapping.h"
 #include "mms_mapping_internal.h"
 #include "mms_server_internal.h"
@@ -2024,6 +2030,13 @@ createMmsModelFromIedModel(MmsMapping* self, IedModel* iedModel)
 {
     MmsDevice* mmsDevice = NULL;
 
+    MMAP_DBG("createMmsModelFromIedModel: enter self=%p model=%p", self, iedModel);
+    if (iedModel == NULL) {
+        MMAP_DBG("createMmsModelFromIedModel: iedModel is NULL");
+        return NULL;
+    }
+    MMAP_DBG("iedModel->name=%p firstChild=%p dataSets=%p", (void*)iedModel->name, (void*)iedModel->firstChild, (void*)iedModel->dataSets);
+
     mmsDevice = MmsDevice_create(iedModel->name);
 
     if (iedModel->firstChild != NULL) {
@@ -2039,6 +2052,7 @@ createMmsModelFromIedModel(MmsMapping* self, IedModel* iedModel)
         }
     }
 
+    MMAP_DBG("createMmsModelFromIedModel: exit mmsDevice=%p", mmsDevice);
     return mmsDevice;
 }
 
@@ -2046,6 +2060,12 @@ MmsMapping*
 MmsMapping_create(IedModel* model, IedServer iedServer)
 {
     MmsMapping* self = (MmsMapping*) GLOBAL_CALLOC(1, sizeof(struct sMmsMapping));
+
+    MMAP_DBG("create: enter model=%p iedServer=%p self=%p", model, iedServer, self);
+    if (self == NULL) {
+        MMAP_DBG("create: allocation failed");
+        return NULL;
+    }
 
     self->model = model;
     self->iedServer = iedServer;
@@ -2092,13 +2112,16 @@ MmsMapping_create(IedModel* model, IedServer iedServer)
     self->attributeAccessHandlers = LinkedList_create();
 
     /* create data model specification */
+    MMAP_DBG("about to build MMS device from IED model");
     self->mmsDevice = createMmsModelFromIedModel(self, model);
 
     if (self->mmsDevice == false) {
-    	MmsMapping_destroy(self);
-    	self = NULL;
+        MMAP_DBG("create: createMmsModelFromIedModel returned NULL, destroying");
+        MmsMapping_destroy(self);
+        self = NULL;
     }
     else {
+        MMAP_DBG("create: mmsDevice=%p", self->mmsDevice);
 #if (CONFIG_IEC61850_REPORT_SERVICE == 1)
         LinkedList rcElem = LinkedList_getNext(self->reportControls);
 
@@ -2119,6 +2142,7 @@ MmsMapping_create(IedModel* model, IedServer iedServer)
 #endif
     }
 
+    MMAP_DBG("create: exit self=%p", self);
     return self;
 }
 
