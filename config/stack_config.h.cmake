@@ -45,6 +45,9 @@
 /* Maximum MMS PDU SIZE - default is 65000 */
 #cmakedefine CONFIG_MMS_MAXIMUM_PDU_SIZE @CONFIG_MMS_MAXIMUM_PDU_SIZE@
 
+/* Poll timeout for the MMS server loop (ms) */
+#cmakedefine CONFIG_SERVER_POLLING_TIMEOUT_MS @CONFIG_SERVER_POLLING_TIMEOUT_MS@
+
 /* number of concurrent MMS client connections the server accepts, -1 for no limit */
 #cmakedefine CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS @CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS@
 

@@ -509,8 +509,8 @@ handleIsoConnections(IsoServer self, bool isSingleThread)
         callTickHandlerForClientConnections(self);
     }
 
-    if (Handleset_waitReady(self->handleset, 1) < 1)
-        return;
+    int wr = Handleset_waitReady(self->handleset, CONFIG_SERVER_POLLING_TIMEOUT_MS);
+    if (wr < 1) return;
 
     Socket connectionSocket;
 
