@@ -729,7 +729,9 @@ IedServer_createWithConfig(IedModel* dataModel, TLSConfiguration tlsConfiguratio
             /* default write access policy allows access to SP, SE and SV FCDAs but denies access to DC and CF FCDAs */
             self->writeAccessPolicies = ALLOW_WRITE_ACCESS_SP | ALLOW_WRITE_ACCESS_SV | ALLOW_WRITE_ACCESS_SE;
 
+#if (CONFIG_IEC61850_CONTROL_SERVICE == 1)
             MmsMapping_initializeControlObjects(self->mmsMapping);
+#endif
 
 #if (CONFIG_IEC61850_REPORT_SERVICE == 1)
             Reporting_activateBufferedReports(self->mmsMapping);
@@ -916,7 +918,9 @@ IedServer_stop(IedServer self)
 
         MmsMapping_stopEventWorkerThread(self->mmsMapping);
 
+#if (CONFIG_IEC61850_REPORT_SERVICE == 1)
         Reporting_deactivateAllReports(self->mmsMapping);
+#endif
 
 #if (CONFIG_MMS_SINGLE_THREADED == 1)
         Thread_destroy(self->serverThread);
@@ -1026,7 +1030,9 @@ IedServer_unlockDataModel(IedServer self)
 #endif /* (CONFIG_INCLUDE_GOOSE_SUPPORT == 1) */
 
     /* check if reports have to be sent! */
+#if (CONFIG_IEC61850_REPORT_SERVICE == 1)
     Reporting_processReportEventsAfterUnlock(self->mmsMapping);
+#endif
 
 #if (CONFIG_MMS_THREADLESS_STACK != 1)
     Semaphore_wait(self->mmsMapping->isModelLockedMutex);

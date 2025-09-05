@@ -981,6 +981,7 @@ handleAsyncResponse(MmsConnection self, ByteBuffer* response, uint32_t bufPos, M
             }
         }
     }
+#if (CONFIG_MMS_FILE_SERVICE == 1)
     else if (outstandingCall->type == MMS_CALL_TYPE_FILE_OPEN)
     {
         MmsConnection_FileOpenHandler handler =
@@ -1065,6 +1066,7 @@ handleAsyncResponse(MmsConnection self, ByteBuffer* response, uint32_t bufPos, M
                 handler(outstandingCall->invokeId, outstandingCall->userParameter, MMS_ERROR_PARSING_RESPONSE, NULL, 0, 0, false);
         }
     }
+#endif
 
     if (err != MMS_ERROR_SERVICE_TIMEOUT)
         removeFromOutstandingCalls(self, outstandingCall->invokeId);
@@ -3797,6 +3799,7 @@ struct fileOpenParameters
     uint64_t lastModified;
 };
 
+#if (MMS_FILE_SERVICE == 1)
 static void
 fileOpenHandler(uint32_t invokeId, void* parameter, MmsError mmsError, int32_t frsmId, uint32_t fileSize, uint64_t lastModified)
 {
@@ -3812,6 +3815,7 @@ fileOpenHandler(uint32_t invokeId, void* parameter, MmsError mmsError, int32_t f
     /* unblock user thread */
     Semaphore_post(parameters->waitForResponse);
 }
+#endif
 
 
 int32_t
@@ -3910,6 +3914,7 @@ struct fileOperationParameters
     bool success;
 };
 
+#if (MMS_FILE_SERVICE == 1)
 static void
 fileOperationHandler(uint32_t invokeId, void* parameter, MmsError mmsError, bool success)
 {
@@ -3923,6 +3928,7 @@ fileOperationHandler(uint32_t invokeId, void* parameter, MmsError mmsError, bool
     /* unblock user thread */
     Semaphore_post(parameters->waitForResponse);
 }
+#endif
 
 void
 MmsConnection_fileClose(MmsConnection self, MmsError* mmsError, int32_t frsmId)
@@ -4088,6 +4094,7 @@ struct fileReadParameters
     bool moreFollows;
 };
 
+#if (MMS_FILE_SERVICE == 1)
 static void
 fileReadHandler(uint32_t invokeId, void* parameter, MmsError mmsError, int frsmId, uint8_t* buffer, uint32_t byteReceived,
         bool moreFollows)
@@ -4106,6 +4113,7 @@ fileReadHandler(uint32_t invokeId, void* parameter, MmsError mmsError, int frsmI
     /* unblock user thread */
     Semaphore_post(parameters->waitForResponse);
 }
+#endif
 
 bool
 MmsConnection_fileRead(MmsConnection self, MmsError* mmsError, int32_t frsmId, MmsFileReadHandler handler,
@@ -4198,6 +4206,7 @@ struct getFileDirParameters
     void* handlerParameter;
 };
 
+#if (MMS_FILE_SERVICE == 1)
 static void
 getFileDirHandler(uint32_t invokeId, void* parameter, MmsError mmsError, char* filename, uint32_t size, uint64_t lastModified,
         bool moreFollows)
@@ -4219,6 +4228,7 @@ getFileDirHandler(uint32_t invokeId, void* parameter, MmsError mmsError, char* f
         parameters->handler(parameters->handlerParameter, filename, size, lastModified);
     }
 }
+#endif
 
 bool
 MmsConnection_getFileDirectory(MmsConnection self, MmsError* mmsError, const char* fileSpecification, const char* continueAfter,

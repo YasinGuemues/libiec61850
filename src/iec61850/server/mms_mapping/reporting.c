@@ -620,9 +620,11 @@ updateGenericTrackingObjectValues(MmsMapping* self, ReportControl* rc, IEC61850_
         if (trkInst->t)
             MmsValue_setUtcTimeMsEx(trkInst->t->mmsValue, Hal_getTimeInMs(), self->iedServer->timeQuality);
 
+#if (CONFIG_IEC61850_SERVICE_TRACKING == 1)
         if (trkInst->errorCode)
             MmsValue_setInt32(trkInst->errorCode->mmsValue,
                               private_IedServer_convertMmsDataAccessErrorToServiceError(errVal));
+#endif
 
         char objRef[130];
 

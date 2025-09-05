@@ -86,8 +86,10 @@ struct sIedServer
     bool running;
 };
 
+#if (CONFIG_IEC61850_SERVICE_TRACKING == 1)
 LIB61850_INTERNAL IEC61850_ServiceError
 private_IedServer_convertMmsDataAccessErrorToServiceError(MmsDataAccessError mmsError);
+#endif
 
 LIB61850_INTERNAL ClientConnection
 private_IedServer_getClientConnectionByHandle(IedServer self, void* serverConnectionHandle);

@@ -699,9 +699,11 @@ updateGenericTrackingObjectValues(MmsMapping* self, SettingGroupControlBlock* sg
         if (trkInst->t)
             MmsValue_setUtcTimeMsEx(trkInst->t->mmsValue, Hal_getTimeInMs(), self->iedServer->timeQuality);
 
+#if (CONFIG_IEC61850_SERVICE_TRACKING == 1)
         if (trkInst->errorCode)
             MmsValue_setInt32(trkInst->errorCode->mmsValue,
                     private_IedServer_convertMmsDataAccessErrorToServiceError(errVal));
+#endif
 
         char objRef[129];
 
@@ -2097,12 +2099,13 @@ MmsMapping_create(IedModel* model, IedServer iedServer)
     	self = NULL;
     }
     else {
+#if (CONFIG_IEC61850_REPORT_SERVICE == 1)
         LinkedList rcElem = LinkedList_getNext(self->reportControls);
 
         while (rcElem) {
             ReportControl* rc = (ReportControl*)LinkedList_getData(rcElem);
 
-            /* backup original sibling of ReportControlBlock */;
+            /* backup original sibling of ReportControlBlock */
             rc->sibling = rc->rcb->sibling;
 
             /* reuse ReportControlBlock.sibling as reference to runtime information (ReportControl) */
@@ -2113,6 +2116,7 @@ MmsMapping_create(IedModel* model, IedServer iedServer)
 
             rcElem = LinkedList_getNext(rcElem);
         }
+#endif
     }
 
     return self;
@@ -3330,7 +3334,9 @@ mmsConnectionHandler(void* parameter, MmsServerConnection connection, MmsServerE
     MmsMapping* self = (MmsMapping*) parameter;
 
     if (event == MMS_SERVER_CONNECTION_TICK) {
+#if (CONFIG_IEC61850_REPORT_SERVICE == 1)
         Reporting_sendReports(self, connection);
+#endif
     }
     else if (event == MMS_SERVER_CONNECTION_CLOSED) {
         ClientConnection clientConnection = private_IedServer_getClientConnectionByHandle(self->iedServer, connection);
