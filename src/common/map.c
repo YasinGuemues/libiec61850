@@ -43,7 +43,13 @@ Map
 Map_create()
 {
     Map map = (Map) GLOBAL_CALLOC(1, sizeof(struct sMap));
+    if (!map)
+        return NULL;
     map->entries = LinkedList_create();
+    if (!map->entries) {
+        GLOBAL_FREEMEM(map);
+        return NULL;
+    }
     map->compareKeys = comparePointerKeys;
     return map;
 }
@@ -57,7 +63,11 @@ Map_size(Map map)
 void*
 Map_addEntry(Map map, void* key, void* value)
 {
+    if (!map || !map->entries)
+        return NULL;
     MapEntry* entry = (MapEntry*) GLOBAL_MALLOC(sizeof(MapEntry));
+    if (!entry)
+        return NULL;
     entry->key = key;
     entry->value = value;
     LinkedList_add(map->entries, entry);
