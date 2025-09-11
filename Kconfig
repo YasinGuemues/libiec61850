@@ -1,0 +1,28 @@
+menu "libIEC61850 Options"
+
+config LIBIEC
+	bool "Enable libIEC61850"
+	default y
+	help
+	  Enable libIEC61850 library support.
+
+config MMS_THREADLESS_STACK
+	bool "Enable MMS Threadless Stack"
+	default y
+	help
+	  Build libIEC61850 with threadless MMS stack support enabled.
+
+config IEC61850_CONTROL_SERVICE
+	bool "Enable IEC 61850 Control Service"
+	default n
+	help
+	  Build libIEC61850 with control service support enabled.
+
+config IEC61850_REPORT_SERVICE
+	bool "Enable IEC 61850 Reporting Service"
+	default n
+	help
+	  Build libIEC61850 with reporting service support enabled.
+
+endmenu
+
